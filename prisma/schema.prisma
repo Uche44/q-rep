@@ -1,0 +1,66 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String             @id @default(cuid())
+  qieUserId     String             @unique
+  walletAddress String             @unique
+  username      String             @unique
+  avatar        String?
+  bio           String?
+  twitter       String?
+  linkedin      String?
+  skills        String[]           // Array of skill tags
+  interests     String[]           // Array of interests
+  joinedAt      DateTime           @default(now())
+  
+  projects      Project[]
+  contributions Contribution[]
+  reputation    ReputationProfile?
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  githubUrl   String?
+  demoUrl     String?
+  tags        String[] // Array of tags (e.g. DeFi, Gaming)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Contribution {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // transaction, vote, event, project, article, bug_report, credential
+  source    String   // Description or url of the source
+  points    Int
+  metadata  String?  // JSON string for extensibility
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ReputationProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  score              Int      @default(0)
+  level              String   @default("Bronze") // Bronze, Silver, Gold, Platinum, Diamond
+  rank               Int      @default(0)
+  projectsBuilt      Int      @default(0)
+  votesCast          Int      @default(0)
+  eventsAttended     Int      @default(0)
+  contributionsCount Int      @default(0)
+  updatedAt          DateTime @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
