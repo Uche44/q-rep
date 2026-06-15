@@ -132,8 +132,9 @@ export class QiePassAdapter {
   ): Promise<QiePassRequestResponse> {
     const address = walletAddress.toLowerCase();
 
-    // Sandbox check: if keys are not set, run local simulator
-    if (!this.publicKey || !this.secretKey) {
+    // Sandbox check: if keys are not set or in production, run local simulator
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction || !this.publicKey || !this.secretKey) {
       return this.simulateInitiate(address, requestedClaims);
     }
 
@@ -180,7 +181,8 @@ export class QiePassAdapter {
    * Calls: GET /api/v1/partners/verification-requests/{requestId}
    */
   async getVerificationStatus(requestId: string): Promise<QiePassRequestResponse> {
-    if (!this.publicKey || !this.secretKey || requestId.startsWith('sandbox_')) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction || !this.publicKey || !this.secretKey || requestId.startsWith('sandbox_')) {
       return this.simulateGetStatus(requestId);
     }
 
@@ -215,7 +217,8 @@ export class QiePassAdapter {
    * Calls: POST /api/v1/vc/partner/claim-and-verify
    */
   async claimAndVerify(requestId: string): Promise<{ success: boolean; profile?: QiePassProfile; error?: string }> {
-    if (!this.publicKey || !this.secretKey || requestId.startsWith('sandbox_')) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction || !this.publicKey || !this.secretKey || requestId.startsWith('sandbox_')) {
       return this.simulateClaim(requestId);
     }
 
