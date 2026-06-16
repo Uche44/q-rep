@@ -21,6 +21,23 @@ export default function DashboardPage() {
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'activity' | 'submit' | 'ai' | 'edit'>('activity');
   
+  // Onboarding interest-picker states (for new users)
+  const ECOSYSTEM_AREAS = [
+    'DeFi & Protocols',
+    'Infrastructure & Nodes',
+    'Identity & Privacy',
+    'Payments & Commerce',
+    'Gaming & NFTs',
+    'Developer Tooling',
+    'Governance & DAOs',
+    'Community & Education',
+  ];
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [onboardingGoals, setOnboardingGoals] = useState('');
+  const [onboardingGuide, setOnboardingGuide] = useState<any>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [onboardingError, setOnboardingError] = useState('');
+  
   // Submit Form States
   const [formType, setFormType] = useState('project');
   const [formTitle, setFormTitle] = useState('');
@@ -154,6 +171,38 @@ export default function DashboardPage() {
       console.error(err);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  // Determine if user is brand new (no reputation activity yet)
+  const isNewUser = (u: any) =>
+    !u?.reputation?.score && !u?.reputation?.contributionsCount && contributions.length === 0;
+
+  // Onboarding guide generation for new users
+  const handleGenerateOnboardingGuide = async () => {
+    if (selectedInterests.length === 0) {
+      setOnboardingError('Please select at least one area you are interested in.');
+      return;
+    }
+    setOnboardingError('');
+    setOnboardingLoading(true);
+    setOnboardingGuide(null);
+    try {
+      const res = await fetch('/api/ai-insights/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interests: selectedInterests, goals: onboardingGoals }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOnboardingGuide(data.guide);
+      } else {
+        setOnboardingError('Failed to generate guide. Please try again.');
+      }
+    } catch (err) {
+      setOnboardingError('Network error. Please try again.');
+    } finally {
+      setOnboardingLoading(false);
     }
   };
 
@@ -600,27 +649,192 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1">
                   <h3 className="font-display font-bold text-lg text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-qie-pink animate-pulse" /> AI Reputation Insights
+                    <Sparkles className="w-5 h-5 text-qie-pink animate-pulse" />
+                    {isNewUser(user) ? 'AI Ecosystem Onboarding' : 'AI Reputation Insights'}
                   </h3>
-                  <p className="text-xs text-zinc-500">AI reads your verified metrics (transactions, code, votes) to draft a progress plan.</p>
+                  <p className="text-xs text-zinc-500">
+                    {isNewUser(user)
+                      ? 'Tell us what you want to build or contribute, and we will generate a personalised getting-started plan.'
+                      : 'AI reads your verified metrics (transactions, code, votes) to draft a progress plan.'}
+                  </p>
                 </div>
-                
-                <button
-                  onClick={generateAIPlan}
-                  disabled={aiLoading}
-                  className="bg-qie-pink text-black font-semibold text-xs px-4 py-2 rounded-lg hover:bg-qie-pink/90 transition-colors cursor-pointer"
-                >
-                  {aiLoading ? 'Analyzing...' : 'Generate New Insights'}
-                </button>
+
+                {!isNewUser(user) && (
+                  <button
+                    onClick={generateAIPlan}
+                    disabled={aiLoading}
+                    className="bg-qie-pink text-black font-semibold text-xs px-4 py-2 rounded-lg hover:bg-qie-pink/90 transition-colors cursor-pointer"
+                  >
+                    {aiLoading ? 'Analyzing...' : 'Generate New Insights'}
+                  </button>
+                )}
               </div>
 
-              {!aiInsights && !aiLoading && (
-                <div className="bg-white/5 rounded-xl p-8 border border-white/5 text-center text-zinc-500 text-xs">
-                  Click 'Generate New Insights' to run the reputation parser.
+              {/* ── NEW USER: INTEREST PICKER ── */}
+              {isNewUser(user) && !onboardingGuide && (
+                <div className="space-y-6">
+                  {/* Intro callout */}
+                  <div className="p-4 bg-indigo-950/30 border border-indigo-500/15 rounded-xl flex gap-3 items-start">
+                    <Sparkles className="w-4 h-4 text-indigo-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      Welcome to QRep! You haven&apos;t started your on-chain journey yet — that&apos;s okay.
+                      Pick the areas below that excite you and we will build a custom step-by-step plan to help you earn your first reputation points.
+                    </p>
+                  </div>
+
+                  {/* Interest chip grid */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">What areas are you interested in?</label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {ECOSYSTEM_AREAS.map((area) => {
+                        const isSelected = selectedInterests.includes(area);
+                        return (
+                          <button
+                            key={area}
+                            type="button"
+                            onClick={() => setSelectedInterests(prev =>
+                              isSelected ? prev.filter(a => a !== area) : [...prev, area]
+                            )}
+                            className={`text-[11px] font-semibold px-3 py-2 rounded-xl border transition-all cursor-pointer text-left leading-tight ${
+                              isSelected
+                                ? 'bg-qie-pink/20 border-qie-pink text-qie-pink'
+                                : 'bg-white/5 border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                            }`}
+                          >
+                            {area}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Optional goals textarea */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                      Any specific goals? <span className="normal-case font-normal text-zinc-500">(Optional)</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="e.g. I want to build a DeFi protocol, earn a grant, or become a validator..."
+                      value={onboardingGoals}
+                      onChange={(e) => setOnboardingGoals(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-qie-pink text-zinc-200 resize-none"
+                    />
+                  </div>
+
+                  {onboardingError && (
+                    <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
+                      {onboardingError}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handleGenerateOnboardingGuide}
+                    disabled={onboardingLoading || selectedInterests.length === 0}
+                    className="w-full bg-qie-pink text-black font-semibold text-xs py-3 rounded-xl hover:bg-qie-pink/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {onboardingLoading ? 'Building your plan...' : 'Generate My Ecosystem Starter Plan'}
+                  </button>
+
+                  {onboardingLoading && (
+                    <div className="space-y-3">
+                      <div className="shimmer-bg h-10 rounded-xl" />
+                      <div className="shimmer-bg h-24 rounded-xl" />
+                      <div className="shimmer-bg h-16 rounded-xl" />
+                    </div>
+                  )}
                 </div>
               )}
 
-              {aiLoading && (
+              {/* ── NEW USER: GUIDE RESULT ── */}
+              {isNewUser(user) && onboardingGuide && (
+                <div className="space-y-6 animate-fade-in-up">
+                  {/* Reset button */}
+                  <button
+                    onClick={() => { setOnboardingGuide(null); setSelectedInterests([]); setOnboardingGoals(''); }}
+                    className="text-[11px] text-zinc-500 hover:text-zinc-300 underline cursor-pointer transition-colors"
+                  >
+                    ← Change my interests
+                  </button>
+
+                  {/* Summary */}
+                  <div className="p-4 bg-qie-pink-dim border border-qie-pink/10 rounded-xl space-y-1.5">
+                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-qie-pink" /> Your Personalised QIE Roadmap
+                    </h4>
+                    <p className="text-sm font-medium text-zinc-100 italic">
+                      &quot;{onboardingGuide.summary}&quot;
+                    </p>
+                  </div>
+
+                  {/* Interest area badges */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Chosen Focus Areas</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {onboardingGuide.selectedAreas.map((area: string, idx: number) => (
+                        <span key={idx} className="text-[11px] px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-semibold">
+                          {area}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* First steps checklist */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckSquare className="w-4 h-4 text-qie-pink" /> Your First Steps to Reputation Points
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {onboardingGuide.firstSteps.map((step: string, idx: number) => (
+                        <div key={idx} className="bg-white/5 border border-white/5 p-3 rounded-xl flex items-start gap-2.5">
+                          <span className="text-qie-pink font-bold text-xs mt-0.5 flex-shrink-0">{idx + 1}.</span>
+                          <span className="text-xs text-zinc-300 leading-relaxed">{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Next milestone */}
+                  <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-4">
+                    <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">🎯 First Milestone</p>
+                    <p className="text-xs text-zinc-300">{onboardingGuide.nextMilestone}</p>
+                  </div>
+
+                  {/* Suggested roles */}
+                  {onboardingGuide.suggestedRoles?.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Award className="w-4 h-4 text-zinc-400" /> Ecosystem Roles to Aim For
+                      </h4>
+                      <div className="flex gap-2 flex-wrap">
+                        {onboardingGuide.suggestedRoles.map((role: string, idx: number) => (
+                          <span key={idx} className="text-xs px-3 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-semibold">
+                            {role}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CTA to log first contribution */}
+                  <button
+                    onClick={() => setActiveTab('submit')}
+                    className="w-full border border-qie-pink/30 hover:border-qie-pink text-qie-pink text-xs font-semibold py-2.5 rounded-xl hover:bg-qie-pink/10 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Log My First Contribution Now
+                  </button>
+                </div>
+              )}
+
+              {/* ── RETURNING USER: STANDARD INSIGHTS ── */}
+              {!isNewUser(user) && !aiInsights && !aiLoading && (
+                <div className="bg-white/5 rounded-xl p-8 border border-white/5 text-center text-zinc-500 text-xs">
+                  Click &apos;Generate New Insights&apos; to run the reputation parser.
+                </div>
+              )}
+
+              {!isNewUser(user) && aiLoading && (
                 <div className="space-y-4">
                   <div className="shimmer-bg h-12 rounded-xl" />
                   <div className="shimmer-bg h-24 rounded-xl" />
@@ -628,7 +842,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {aiInsights && (
+              {!isNewUser(user) && aiInsights && (
                 <div className="space-y-6 animate-fade-in-up">
                   {/* Summary */}
                   <div className="p-4 bg-qie-pink-dim border border-qie-pink/10 rounded-xl space-y-1.5">
@@ -636,7 +850,7 @@ export default function DashboardPage() {
                       <Sparkles className="w-3.5 h-3.5 text-qie-pink" /> Executive Summary
                     </h4>
                     <p className="text-sm font-medium text-zinc-100 italic">
-                      "{aiInsights.summary}"
+                      &quot;{aiInsights.summary}&quot;
                     </p>
                   </div>
 
@@ -657,7 +871,7 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {/* Growth Recommendations */}
+                  {/* Recommendations */}
                   {aiInsights.recommendations && aiInsights.recommendations.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -673,7 +887,7 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {/* Suggested Careers/Roles */}
+                  {/* Suggested Roles */}
                   {aiInsights.suggestedRoles && aiInsights.suggestedRoles.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
